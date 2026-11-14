@@ -3,13 +3,23 @@ import { loadConfig } from './config.js';
 import { createPool } from './db/pool.js';
 import { JobQueue } from './jobs/queue.js';
 import { createApi } from './api/server.js';
+import { createSessionVerifier } from './api/auth.js';
+import { MetadataIngester } from './services/MetadataIngester.js';
+import { ProviderMetadataClient } from './providers/metadata.js';
+import { PlaylistIngestionService } from './services/PlaylistIngestionService.js';
 
 const config = loadConfig();
 const pool = createPool(config.databaseUrl);
 const queue = new JobQueue(config.databaseUrl, config.workerConcurrency, error => {
   console.error('Queue error:', error.message);
 });
-const api = createApi(async () => { await pool.query('SELECT 1'); });
+const metadata = new ProviderMetadataClient(new MetadataIngester(new Set([
+  'api.music.apple.com', 'api.spotify.com', 'www.googleapis.com',
+])), config.metadataCredentials);
+const ingestion = new PlaylistIngestionService(pool, metadata, queue);
+const api = createApi(async () => { await pool.query('SELECT 1'); }, {
+  authenticate: createSessionVerifier(config.session), add: (playlistId, userId, rawInput) => ingestion.add(playlistId, userId, rawInput),
+});
 let stopping = false;
 
 async function stop(): Promise<void> {

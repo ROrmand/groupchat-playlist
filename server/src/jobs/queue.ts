@@ -1,4 +1,5 @@
 import { PgBoss } from 'pg-boss';
+import type { PoolClient } from 'pg';
 
 export interface FanOutTrackAdditionJob {
   eventId: string;
@@ -59,6 +60,13 @@ export class JobQueue {
 
   async send<Name extends keyof JobPayloads>(name: Name, payload: JobPayloads[Name]): Promise<string | null> {
     return this.boss.send(name, payload);
+  }
+
+  async sendInTransaction<Name extends keyof JobPayloads>(client: PoolClient, name: Name, payload: JobPayloads[Name]): Promise<void> {
+    const identifier = await this.boss.send(name, payload, {
+      db: { executeSql: (text, values) => client.query(text, values) },
+    });
+    if (!identifier) throw new Error('Transactional job was not created');
   }
 
   async stop(): Promise<void> {

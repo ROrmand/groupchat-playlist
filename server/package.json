@@ -11,9 +11,15 @@
     "start": "node dist/src/main.js",
     "dev": "tsx src/main.ts",
     "migrate": "tsx src/db/migrate.ts",
-    "test": "tsx --test test/unit.test.ts",
-    "test:integration": "tsx --test test/database.test.ts"
+    "session": "tsx src/dev/session.ts",
+    "test": "tsx --test test/*.test.ts",
+    "test:integration": "tsx --test test/*.integration.ts"
   },
-  "dependencies": { "pg": "^8.16.0", "pg-boss": "^12.0.0" },
+  "dependencies": {
+    "ipaddr.js": "^2.5.0",
+    "jose": "^6.2.17",
+    "pg": "^8.16.0",
+    "pg-boss": "^12.0.0"
+  },
   "devDependencies": { "@types/node": "^22.0.0", "@types/pg": "^8.15.0", "tsx": "^4.20.0", "typescript": "^5.9.0" }
 }

@@ -6,7 +6,7 @@ let package = Package(
     products: [.library(name: "TrackResolverEngine", targets: ["TrackResolverEngine"])],
     targets: [
         .target(name: "TrackResolverEngine"),
-        .testTarget(name: "TrackResolverEngineTests", dependencies: ["TrackResolverEngine"])
+        .testTarget(name: "TrackResolverEngineTests", dependencies: ["TrackResolverEngine"], resources: [.copy("Fixtures")])
     ],
     swiftLanguageModes: [.v6]
 )

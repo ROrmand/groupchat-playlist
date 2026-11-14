@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { test } from 'node:test';
@@ -26,18 +26,21 @@ test('fresh PostgreSQL 16 migrations, invariants, and queue worker', { timeout: 
     created = true;
     await Promise.all([migrate(pool), migrate(pool)]);
     await migrate(pool);
-    assert.equal((await pool.query('SELECT count(*) FROM schema_migrations')).rows[0].count, '1');
+    assert.equal((await pool.query('SELECT count(*) FROM schema_migrations')).rows[0].count, '2');
 
     const directory = await mkdtemp(join(tmpdir(), 'baton-migrations-'));
     try {
+      for (const name of await readdir(resolve('migrations'))) {
+        await writeFile(join(directory, name), await readFile(resolve('migrations', name)));
+      }
       const initialSql = await readFile(resolve('migrations/001_initial_schema.sql'), 'utf8');
       await writeFile(join(directory, '001_initial_schema.sql'), `${initialSql}\nSELECT 1;`);
       await assert.rejects(migrate(pool, directory), /modified/);
       await writeFile(join(directory, '001_initial_schema.sql'), initialSql);
-      await writeFile(join(directory, '002_failure.sql'), 'CREATE TABLE rollback_probe (id INTEGER); SELECT * FROM missing_table;');
+      await writeFile(join(directory, '003_failure.sql'), 'CREATE TABLE rollback_probe (id INTEGER); SELECT * FROM missing_table;');
       await assert.rejects(migrate(pool, directory), { code: '42P01' });
       assert.equal((await pool.query("SELECT to_regclass('rollback_probe') AS relation")).rows[0].relation, null);
-      assert.equal((await pool.query('SELECT count(*) FROM schema_migrations')).rows[0].count, '1');
+      assert.equal((await pool.query('SELECT count(*) FROM schema_migrations')).rows[0].count, '2');
     } finally { await rm(directory, { recursive: true }); }
 
     const userId = randomUUID();
