@@ -8,6 +8,8 @@
 2. **1-Tap iOS Share Extension:** Whenever a track or link is shared in iMessage, WhatsApp, Discord, Instagram, or Safari, any member taps **Share → App Extension**, chooses the group playlist, and confirms in under a second.
 3. **Cross-Platform Two-Way Sync (Additions & In-App Removals):** The server canonicalizes tracks (keyed by ISRC with duration-checked fallback matching), records immutable playlist mutations (`TRACK_ADDED`, `TRACK_REMOVED`), and asynchronously updates every member's connected streaming account through a pluggable provider adapter registry.
 
+**Delivery stages:** Sprint 4 delivers backend identity, connections, invitations, and playlist creation with activation for future events only. Sprint 5 must deliver provider-specific consent, privacy/EULA, attribution, least-privilege scopes, disconnect, and account-deletion surfaces with the native onboarding work. Historical active-track backfill, recreation, client reconciliation, and enforceable provider-data retention/deletion remain Sprint 6 work. Production release requires a dated compliance and live-provider review for Spotify, Apple Music, and YouTube Music. See `docs/sprint-4.md` and `docs/sprint-4-verification.md` for the implemented boundary and `docs/provider-compliance-roadmap.md` for future acceptance criteria.
+
 ---
 
 ## 2. Core Source of Truth
@@ -44,8 +46,11 @@
 ### Principal Entities
 * **`User`**: `id`, `apple_sub` (unique), `display_name`, `created_at`
 * **`StreamingConnection`**: `id`, `user_id`, `provider` (`apple_music` | `spotify` | `youtube_music` | extensible), `encrypted_access_token`, `encrypted_refresh_token`, `token_expires_at`, `storefront` (e.g., `'us'`, `'gb'`, `'global'`), `status` (`active` | `needs_reauth` | `revoked`)
-* **`GroupPlaylist`**: `id`, `name`, `owner_id`, `invite_code` (unique), `current_sequence` (integer), `created_at`
-* **`PlaylistMembership`**: `id`, `group_playlist_id`, `user_id`, `external_playlist_id`, `last_synced_sequence`, `status` (`invited` | `provisioning` | `active` | `recreating` | `paused` | `removed`)
+* **`GroupPlaylist`**: `id`, `name`, `owner_id`, `invite_code` (legacy unique internal placeholder, not an onboarding secret), `current_sequence` (integer), `created_at`
+* **`PlaylistInvite`**: `id`, `group_playlist_id`, hashed invitation token, expiry, revocation timestamp, creator; acceptance recorded once per invite/user.
+* **`AuthSession`**: user-bound session family, expiry, revocation timestamp; opaque refresh tokens are hashed, rotated, and retained for replay detection.
+* **`ProvisioningAttempt`**: membership and connection IDs, bounded attempt count, lifecycle status, sanitized error, optional known external playlist ID; uncertain creates require reconciliation.
+* **`PlaylistMembership`**: `id`, `group_playlist_id`, `user_id`, `streaming_connection_id`, `external_playlist_id`, `provisioned_at_sequence`, `last_synced_sequence`, `status` (`invited` | `provisioning` | `active` | `recreating` | `paused` | `removed`)
 * **`CanonicalTrack`**: `id`, `isrc` (unique, nullable), `normalized_title`, `normalized_artist`, `fallback_dedup_key` (unique composite of normalized title + artist + 3s duration bucket), `album`, `duration_ms`
 * **`TrackProviderMapping`**: `id`, `canonical_track_id`, `provider`, `storefront`, `external_track_id` *(decoupled lookup table so adding new services requires zero schema migrations)*
 * **`PlaylistItem`** *(Materialized Active View)*: `id`, `group_playlist_id`, `canonical_track_id`, `added_by_user_id`, `position`, `added_at`, `removed_at` (nullable), `removed_by_user_id` (nullable)
@@ -54,7 +59,8 @@
 
 ### Key State Transitions
 * **`PlaylistMembership.status`**:
-  `invited` → *(completes Sign in with Apple + links streaming service)* → `provisioning` → *(external playlist created + active items backfilled)* → `active`
+  `invited` → *(completes Sign in with Apple + links streaming service)* → `provisioning` → *(external playlist created; future-event cursor initialized)* → `active`
+  * Historical active-item backfill is a separate state-based Sprint 6 operation keyed by `provisioned_at_sequence`; it does not block Sprint 4 activation or replay old mutations through the live fan-out cursor.
   * On `PLAYLIST_NOT_FOUND` (user deleted the playlist inside Spotify/Apple Music): `active` → `recreating` → *(new external playlist created & active items replayed)* → `active`.
   * On leave or removal: `active` → `removed`.
 * **`SyncDeliveryLog.status` (Driven by Normalized `ProviderSyncError`)**:
@@ -68,8 +74,8 @@
 ## 5. Primary User Journeys & Failure Paths
 
 ### Journey A: 3-Tap Invite Onboarding & Auto-Provisioning
-* **Happy Path:** User A creates `"The Boys GC"` → Server provisions `"The Boys GC"` on User A's Apple Music and generates a Universal Link (`yourapp.link/invite/abc123`). User B taps the link in iMessage → **Tap 1:** *Continue with Apple* (Face ID) → **Tap 2:** *Connect Spotify* (OAuth PKCE) → Server provisions `"The Boys GC"` on User B's Spotify, sets membership to `active`, and backfills all currently active tracks.
-* **Failure Path:** User B signs in with Apple but closes the app before linking Spotify → Membership stays in `invited` until OAuth completes; fan-out jobs skip unlinked members without blocking the group and trigger backfill once linked.
+* **Happy Path:** User A creates `"The Boys GC"` → Server provisions `"The Boys GC"` on User A's Apple Music and generates a Universal Link (`yourapp.link/invite/abc123`). User B taps the link in iMessage → **Tap 1:** *Continue with Apple* (Face ID) → **Tap 2:** *Connect Spotify* (OAuth PKCE) → Server provisions `"The Boys GC"` on User B's Spotify, records the activation boundary, and sets the membership to `active` for future fan-out. Sprint 6 backfills the active historical snapshot.
+* **Failure Path:** User B signs in with Apple but closes the app before linking Spotify → Membership stays in `invited` until OAuth completes; fan-out jobs skip unlinked members without blocking the group. Provisioning failures remain isolated to that membership, and ambiguous playlist creation requires reconciliation before retry.
 
 ### Journey B: Sharing & Removing Tracks
 * **Happy Path (Add):** User A opens a song's Share Sheet and taps **Baton** → Baton displays only the group playlists where User A is an active member → User A selects one group playlist → the Share Extension sends `{ group_playlist_id, raw_input }` using the Shared Keychain JWT → Server resolves the song, inserts `PlaylistItem` + `PlaylistEvent` (`TRACK_ADDED`, `v1`), and returns `202 Accepted` → Baton closes with a success state → the fan-out worker resolves per-storefront IDs (caching them in `TrackProviderMapping`) and automatically appends the track to every active member's provisioned playlist when that recording is available on the member's service.

@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:crypto';
 
 export class TokenVault {
   private readonly key: Buffer;
@@ -14,6 +14,10 @@ export class TokenVault {
     cipher.setAAD(Buffer.from(connectionId));
     const ciphertext = Buffer.concat([cipher.update(token, 'utf8'), cipher.final()]);
     return ['v1', nonce.toString('base64'), cipher.getAuthTag().toString('base64'), ciphertext.toString('base64')].join('.');
+  }
+
+  deriveInviteToken(inviteId: string): string {
+    return createHmac('sha256', this.key).update(`baton:invite:v1:${inviteId}`).digest('base64url');
   }
 
   decrypt(value: string, connectionId: string): string {

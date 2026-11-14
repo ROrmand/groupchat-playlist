@@ -10,6 +10,7 @@ import { PlaylistIngestionService } from './services/PlaylistIngestionService.js
 import { configureProviders } from './providers/configure.js';
 import { FanOutPlanner } from './services/FanOutPlanner.js';
 import { FanOutWorker } from './services/FanOutWorker.js';
+import { configureOnboarding } from './services/configureOnboarding.js';
 
 const config = loadConfig();
 const providers = configureProviders();
@@ -21,9 +22,12 @@ const metadata = new ProviderMetadataClient(new MetadataIngester(new Set([
   'api.music.apple.com', 'api.spotify.com', 'www.googleapis.com',
 ])), config.metadataCredentials);
 const ingestion = new PlaylistIngestionService(pool, metadata, queue);
+const onboarding = configureOnboarding(pool, queue, config.session, providers);
 const api = createApi(async () => { await pool.query('SELECT 1'); }, {
-  authenticate: createSessionVerifier(config.session), add: (playlistId, userId, rawInput) => ingestion.add(playlistId, userId, rawInput),
-});
+  authenticate: onboarding ? authorization => onboarding.sessions.authenticate(authorization)
+    : createSessionVerifier(process.env.ALLOW_DEV_SESSIONS === '1' ? config.session : undefined),
+  add: (playlistId, userId, rawInput) => ingestion.add(playlistId, userId, rawInput),
+}, onboarding);
 let stopping = false;
 
 async function stop(): Promise<void> {
@@ -39,6 +43,7 @@ async function stop(): Promise<void> {
 try {
   await pool.query('SELECT 1');
   await queue.start();
+  if (onboarding) await queue.register('provision-membership', payload => onboarding.provisioning.deliver(payload.attemptId));
   if (providers) {
     const planner = new FanOutPlanner(pool, queue);
     const worker = new FanOutWorker(pool, queue, providers.registry, providers.vault);

@@ -26,7 +26,7 @@ test('fresh PostgreSQL 16 migrations, invariants, and queue worker', { timeout: 
     created = true;
     await Promise.all([migrate(pool), migrate(pool)]);
     await migrate(pool);
-    assert.equal((await pool.query('SELECT count(*) FROM schema_migrations')).rows[0].count, '3');
+    assert.equal((await pool.query('SELECT count(*) FROM schema_migrations')).rows[0].count, '4');
 
     const directory = await mkdtemp(join(tmpdir(), 'baton-migrations-'));
     try {
@@ -37,10 +37,10 @@ test('fresh PostgreSQL 16 migrations, invariants, and queue worker', { timeout: 
       await writeFile(join(directory, '001_initial_schema.sql'), `${initialSql}\nSELECT 1;`);
       await assert.rejects(migrate(pool, directory), /modified/);
       await writeFile(join(directory, '001_initial_schema.sql'), initialSql);
-      await writeFile(join(directory, '004_failure.sql'), 'CREATE TABLE rollback_probe (id INTEGER); SELECT * FROM missing_table;');
+      await writeFile(join(directory, '005_failure.sql'), 'CREATE TABLE rollback_probe (id INTEGER); SELECT * FROM missing_table;');
       await assert.rejects(migrate(pool, directory), { code: '42P01' });
       assert.equal((await pool.query("SELECT to_regclass('rollback_probe') AS relation")).rows[0].relation, null);
-      assert.equal((await pool.query('SELECT count(*) FROM schema_migrations')).rows[0].count, '3');
+      assert.equal((await pool.query('SELECT count(*) FROM schema_migrations')).rows[0].count, '4');
     } finally { await rm(directory, { recursive: true }); }
 
     const userId = randomUUID();
@@ -53,9 +53,14 @@ test('fresh PostgreSQL 16 migrations, invariants, and queue worker', { timeout: 
     await pool.query(`INSERT INTO canonical_tracks (id, isrc, normalized_title, normalized_artist, fallback_dedup_key, duration_ms)
       VALUES ($1, 'USAAA2300001', 'test song', 'test artist', 'test song|test artist|60', 180000)`, [trackId]);
     await pool.query("INSERT INTO group_playlists (id, name, owner_id, invite_code) VALUES ($1, 'Test GC', $2, 'invite')", [groupId, userId]);
-    await pool.query("INSERT INTO playlist_memberships (id, group_playlist_id, user_id, status) VALUES ($1, $2, $3, 'active')", [membershipId, groupId, userId]);
+    await pool.query(`INSERT INTO streaming_connections (id, user_id, provider, encrypted_access_token, storefront, status)
+      VALUES ($1, $1, 'test', 'offline-fixture', 'us', 'active')`, [userId]);
+    await pool.query(`INSERT INTO playlist_memberships (id, group_playlist_id, user_id, status, streaming_connection_id, external_playlist_id)
+      VALUES ($1, $2, $3, 'active', $3, 'offline-playlist')`, [membershipId, groupId, userId]);
     await assert.rejects(pool.query("INSERT INTO users (id, apple_sub, display_name) VALUES ($1, 'apple-sub', 'Duplicate')", [randomUUID()]), { code: '23505' });
-    await assert.rejects(pool.query("INSERT INTO playlist_memberships (id, group_playlist_id, user_id, status) VALUES ($1, $2, $3, 'active')", [randomUUID(), groupId, userId]), { code: '23505' });
+    await assert.rejects(pool.query(`INSERT INTO playlist_memberships (id, group_playlist_id, user_id, status, streaming_connection_id, external_playlist_id)
+      VALUES ($1, $2, $3, 'active', $3, 'offline-playlist')`, [randomUUID(), groupId, userId]), { code: '23505' });
+    await assert.rejects(pool.query("UPDATE playlist_memberships SET external_playlist_id = NULL WHERE id = $1", [membershipId]), { code: '23514' });
     await assert.rejects(pool.query("INSERT INTO group_playlists (id, name, owner_id, invite_code) VALUES ($1, 'Duplicate', $2, 'invite')", [randomUUID(), userId]), { code: '23505' });
     const insertTrack = (isrc: string | null, key: string) => pool.query(`INSERT INTO canonical_tracks
       (id, isrc, normalized_title, normalized_artist, fallback_dedup_key, duration_ms)

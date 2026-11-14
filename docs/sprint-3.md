@@ -18,6 +18,10 @@ Run migrations before starting the server. Migration `003_provider_fanout.sql` a
 memberships are not silently assigned a provider. Sprint 4 provisioning must set this ID and
 `external_playlist_id` before marking a membership active.
 
+Sprint 4 implements this handoff; see `sprint-4.md` and `sprint-4-verification.md`. New memberships
+initialize their future-event cursor and `provisioned_at_sequence` at activation. Historical active
+tracks remain a Sprint 6 state-based backfill, not replay through the live fan-out cursor.
+
 Set `TOKEN_ENCRYPTION_KEY` to a canonical base64-encoded 32-byte random key from secret management.
 Without it, startup leaves fan-out handlers disabled and ingestion jobs stay queued. Existing
 metadata credential configuration remains independent. Never commit secrets or put real tokens in fixtures.

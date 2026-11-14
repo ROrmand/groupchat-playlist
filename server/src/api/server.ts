@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { IngestionError } from '../domain/errors.js';
 import type { IngestionResult } from '../services/PlaylistIngestionService.js';
 import { IngestionRateLimiter, uuidPattern } from './auth.js';
+import { onboardingRouter, type OnboardingServices } from './onboarding.js';
 
 export interface IngestionApi {
   authenticate(authorization: string | undefined): Promise<string>;
@@ -30,10 +31,12 @@ async function readInput(request: IncomingMessage): Promise<string> {
   return record.rawInput;
 }
 
-export function createApi(checkDatabase: () => Promise<void>, ingestion?: IngestionApi): Server {
+export function createApi(checkDatabase: () => Promise<void>, ingestion?: IngestionApi, onboarding?: OnboardingServices): Server {
   const limiter = new IngestionRateLimiter();
+  const routeOnboarding = onboardingRouter(onboarding);
   return createServer(async (request, response) => {
     response.setHeader('Content-Type', 'application/json');
+    if (await routeOnboarding(request, response)) return;
     const route = /^\/api\/playlists\/([^/]+)\/items$/.exec(request.url ?? '');
     if (request.method === 'POST' && route) {
       try {

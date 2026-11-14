@@ -22,6 +22,7 @@ export interface RecreatePlaylistJob {
   userId: string;
 }
 export interface JobPayloads {
+  'provision-membership': { attemptId: string };
   'deliver-membership': { membershipId: string; throughSequence: number };
   'fan-out-track-addition': FanOutTrackAdditionJob;
   'fan-out-track-removal': FanOutTrackRemovalJob;
@@ -29,6 +30,7 @@ export interface JobPayloads {
   'recreate-playlist': RecreatePlaylistJob;
 }
 export const queueNames = [
+  'provision-membership',
   'fan-out-track-addition', 'fan-out-track-removal', 'backfill-membership', 'recreate-playlist', 'deliver-membership',
 ] as const satisfies readonly (keyof JobPayloads)[];
 

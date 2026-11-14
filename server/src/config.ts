@@ -17,6 +17,7 @@ function positiveInteger(value: string, name: string): number {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  if (env.NODE_ENV === 'production' && env.ALLOW_DEV_SESSIONS === '1') throw new Error('Development sessions cannot be enabled in production');
   if (!env.DATABASE_URL) throw new Error('DATABASE_URL is required');
   const databaseUrl = new URL(env.DATABASE_URL);
   if (!['postgres:', 'postgresql:'].includes(databaseUrl.protocol)) throw new Error('DATABASE_URL must use PostgreSQL');

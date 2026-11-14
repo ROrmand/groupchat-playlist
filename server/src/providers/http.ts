@@ -1,7 +1,7 @@
 import { ProviderSyncError } from './StreamingProviderAdapter.js';
 
 export type ProviderTransport = (url: string, init: RequestInit) => Promise<Response>;
-const hosts = new Set(['api.music.apple.com', 'api.spotify.com', 'accounts.spotify.com', 'www.googleapis.com', 'oauth2.googleapis.com']);
+const hosts = new Set(['api.music.apple.com', 'appleid.apple.com', 'api.spotify.com', 'accounts.spotify.com', 'www.googleapis.com', 'oauth2.googleapis.com']);
 
 export class ProviderHttp {
   constructor(private readonly transport: ProviderTransport = fetch) {}

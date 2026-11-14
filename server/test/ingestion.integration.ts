@@ -36,11 +36,14 @@ test('ingestion is authorized, canonical, concurrent, monotonic and transactiona
     const secondPlaylistId = randomUUID();
     for (const userId of [ownerId, memberId, outsiderId]) {
       await pool.query('INSERT INTO users (id, apple_sub, display_name) VALUES ($1, $2, $2)', [userId, userId]);
+      await pool.query(`INSERT INTO streaming_connections (id, user_id, provider, encrypted_access_token, storefront, status)
+        VALUES ($1, $1, 'test', 'offline-fixture', 'us', 'active')`, [userId]);
     }
     for (const groupId of [playlistId, secondPlaylistId]) {
       await pool.query('INSERT INTO group_playlists (id, name, owner_id, invite_code) VALUES ($1, $2, $3, $2)', [groupId, groupId, ownerId]);
       for (const userId of [ownerId, memberId]) {
-        await pool.query("INSERT INTO playlist_memberships (id, group_playlist_id, user_id, status) VALUES ($1, $2, $3, 'active')", [randomUUID(), groupId, userId]);
+        await pool.query(`INSERT INTO playlist_memberships (id, group_playlist_id, user_id, status, streaming_connection_id, external_playlist_id)
+          VALUES ($1, $2, $3, 'active', $3, 'offline-playlist')`, [randomUUID(), groupId, userId]);
       }
     }
     const fixtures = new Map<string, TrackMetadata>();
