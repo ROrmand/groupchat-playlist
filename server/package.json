@@ -13,7 +13,7 @@
     "migrate": "tsx src/db/migrate.ts",
     "session": "tsx src/dev/session.ts",
     "test": "tsx --test test/*.test.ts",
-    "test:integration": "tsx --test test/*.integration.ts"
+    "test:integration": "tsx --test --test-concurrency=1 test/*.integration.ts"
   },
   "dependencies": {
     "ipaddr.js": "^2.5.0",
