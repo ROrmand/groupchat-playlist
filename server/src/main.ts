@@ -7,8 +7,12 @@ import { createSessionVerifier } from './api/auth.js';
 import { MetadataIngester } from './services/MetadataIngester.js';
 import { ProviderMetadataClient } from './providers/metadata.js';
 import { PlaylistIngestionService } from './services/PlaylistIngestionService.js';
+import { configureProviders } from './providers/configure.js';
+import { FanOutPlanner } from './services/FanOutPlanner.js';
+import { FanOutWorker } from './services/FanOutWorker.js';
 
 const config = loadConfig();
+const providers = configureProviders();
 const pool = createPool(config.databaseUrl);
 const queue = new JobQueue(config.databaseUrl, config.workerConcurrency, error => {
   console.error('Queue error:', error.message);
@@ -35,6 +39,13 @@ async function stop(): Promise<void> {
 try {
   await pool.query('SELECT 1');
   await queue.start();
+  if (providers) {
+    const planner = new FanOutPlanner(pool, queue);
+    const worker = new FanOutWorker(pool, queue, providers.registry, providers.vault);
+    await queue.register('fan-out-track-addition', payload => planner.plan(payload.eventId));
+    await queue.register('fan-out-track-removal', payload => planner.plan(payload.eventId));
+    await queue.register('deliver-membership', payload => worker.deliver(payload.membershipId, payload.throughSequence));
+  }
   api.listen(config.port, config.host);
   await once(api, 'listening');
   console.log(`Baton listening on ${config.host}:${config.port}`);

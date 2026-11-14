@@ -1,8 +1,10 @@
 # Baton
 
-Sprint 2 track ingestion for a collaborative, cross-service group playlist application.
+Track ingestion and provider fan-out for a collaborative, cross-service group playlist application.
 
 The server now accepts authenticated track submissions, resolves configured provider metadata, deduplicates canonical recordings, and atomically stores playlist items, events, and fan-out jobs. See `docs/sprint-2.md` for the accepted implementation decisions and a local testing walkthrough.
+
+Sprint 3 adds streaming write adapters, encrypted token handling, and ordered per-member delivery. See `docs/sprint-3.md` for setup, offline verification, and reconciliation limitations.
 
 ## Layout
 
@@ -36,8 +38,8 @@ npm run dev
 
 Migrations run explicitly before server startup, inside a transaction protected by a PostgreSQL advisory lock. Applied files cannot be edited or removed; introduce a new numbered SQL file for changes. The schema enforces active-item deduplication, event and delivery uniqueness, foreign keys, valid statuses, nonnegative counters, and append-only event rows. The ingestion service verifies active membership, locks playlist state, and commits the next sequence, item, event, and queue job in one PostgreSQL transaction.
 
-## Queue scaffold and scope
+## Queue workers and scope
 
-Startup initializes pg-boss and four typed queues with bounded worker concurrency and exponential retries. Workers register through `JobQueue.register`; no production handlers are registered yet, so ingestion jobs remain queued until Sprint 3 implements delivery. Metadata reads use configured provider credentials, not playlist-write adapters. Apple sign-in, provider token refresh, fan-out delivery, iOS targets, entitlements, and persistent on-device queues remain later-sprint work. The Swift protocols are dependency contracts, not a finalized HTTP wire format.
+Startup initializes pg-boss and five typed queues with bounded worker concurrency and exponential retries. Setting `TOKEN_ENCRYPTION_KEY` enables addition/removal planners and the per-member delivery worker; without it ingestion jobs remain queued. Active memberships require an explicitly selected connection and an external playlist. Metadata reads use separate credentials from playlist-write adapters. Apple sign-in, connection provisioning, iOS targets, entitlements, and persistent on-device queues remain later-sprint work. Backfill/recreation and client reconciliation are handoffs, not implemented recovery workers. The Swift protocols are dependency contracts, not a finalized HTTP wire format.
 
 The CI skeleton runs the same verification gate on Linux. Darwin adapter compilation and the full release pipeline remain later-sprint work.

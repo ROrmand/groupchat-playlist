@@ -22,13 +22,14 @@ export interface RecreatePlaylistJob {
   userId: string;
 }
 export interface JobPayloads {
+  'deliver-membership': { membershipId: string; throughSequence: number };
   'fan-out-track-addition': FanOutTrackAdditionJob;
   'fan-out-track-removal': FanOutTrackRemovalJob;
   'backfill-membership': BackfillMembershipJob;
   'recreate-playlist': RecreatePlaylistJob;
 }
 export const queueNames = [
-  'fan-out-track-addition', 'fan-out-track-removal', 'backfill-membership', 'recreate-playlist',
+  'fan-out-track-addition', 'fan-out-track-removal', 'backfill-membership', 'recreate-playlist', 'deliver-membership',
 ] as const satisfies readonly (keyof JobPayloads)[];
 
 export class JobQueue {
@@ -62,8 +63,9 @@ export class JobQueue {
     return this.boss.send(name, payload);
   }
 
-  async sendInTransaction<Name extends keyof JobPayloads>(client: PoolClient, name: Name, payload: JobPayloads[Name]): Promise<void> {
+  async sendInTransaction<Name extends keyof JobPayloads>(client: PoolClient, name: Name, payload: JobPayloads[Name], delaySeconds = 0): Promise<void> {
     const identifier = await this.boss.send(name, payload, {
+      startAfter: delaySeconds,
       db: { executeSql: (text, values) => client.query(text, values) },
     });
     if (!identifier) throw new Error('Transactional job was not created');
