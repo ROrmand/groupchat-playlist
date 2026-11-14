@@ -1,0 +1,17 @@
+# Local worktrees and agent-created worktree metadata
+.worktrees/
+.claude/worktrees/
+
+# Swift Package Manager generated state
+.build/
+.swiftpm/
+
+# Planning documentation & sprint boards
+plan/
+
+# Backend generated state and local secrets
+node_modules/
+server/dist/
+.env
+.env.*
+!.env.example

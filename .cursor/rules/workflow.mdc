@@ -1,0 +1,39 @@
+---
+description: Single-task worktree workflow for Swift 6 TrackResolverEngine and iOS adapters
+alwaysApply: true
+---
+
+# Single-task agent workflow
+
+- Read the repository-root `AGENTS.md` before inspecting or changing code, and follow the closest scoped `AGENTS.md` if one exists.
+- Treat this conversation as ephemeral: one narrowly defined task, one branch, and one Git worktree.
+- Before editing, state the task, acceptance criteria, active branch/worktree, and expected file scope.
+- Do not absorb adjacent cleanup, redesign, or unrelated failures into the task. Record them separately for another thread.
+
+## Context discipline
+
+- Search narrowly with `rg`, `rg --files`, and SourceKit-LSP symbol/reference queries before opening files.
+- Open only relevant ranges and direct dependencies. Do not dump the repository tree or whole large files into context.
+- Exclude `.build/`, `.swiftpm/`, `.worktrees/`, `.claude/worktrees/`, derived data, generated files, and binary artifacts.
+- Prefer minimal patches that preserve existing style and user changes.
+
+## Execution boundaries
+
+- Keep `Sources/TrackResolverEngine` Linux-compatible and free of MusicKit, UIKit, and SwiftUI imports.
+- Keep Swift 6 strict concurrency and `Sendable` boundaries intact.
+- Execute the accepted task specification only. Do not invent architecture during implementation.
+- Pause implementation and request an external ChatGPT/Codex specification when work requires MusicKit or entitlement decisions, changes a platform boundary, or becomes a broad multi-file refactor.
+- A handoff spec must define goals, non-goals, affected protocols/files, concurrency and error semantics, migration steps, and acceptance tests.
+
+## Completion loop
+
+1. Inspect narrowly and propose the smallest viable change.
+2. Implement only the task-scoped diff.
+3. Add or update deterministic offline tests using mocks; never require live network or Apple Music access.
+4. Run `swift build` and `swift test`; zero warnings are required.
+5. Review `git diff --check`, `git status --short`, and the final diff for scope creep.
+6. Report changed files, verification results, assumptions, and any follow-up tasks. Never claim completion when a gate did not run or pass.
+
+## Thread handoff
+
+End with a compact handoff: task and branch, commit/PR status, files changed, commands run, unresolved risks, and the safe worktree-removal command after merge.

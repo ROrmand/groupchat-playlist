@@ -1,0 +1,19 @@
+{
+  "name": "baton-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.12.0" },
+  "allowScripts": { "esbuild@0.28.2": true },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/src/main.js",
+    "dev": "tsx src/main.ts",
+    "migrate": "tsx src/db/migrate.ts",
+    "test": "tsx --test test/unit.test.ts",
+    "test:integration": "tsx --test test/database.test.ts"
+  },
+  "dependencies": { "pg": "^8.16.0", "pg-boss": "^12.0.0" },
+  "devDependencies": { "@types/node": "^22.0.0", "@types/pg": "^8.15.0", "tsx": "^4.20.0", "typescript": "^5.9.0" }
+}
