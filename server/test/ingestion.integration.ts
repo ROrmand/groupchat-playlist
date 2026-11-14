@@ -183,7 +183,7 @@ test('ingestion is authorized, canonical, concurrent, monotonic and transactiona
   } finally {
     try { if (started) await queue.stop(); } finally {
       await pool.end();
-      try { if (created) await admin.query(`DROP DATABASE "${databaseName}" WITH (FORCE)`); }
+      try { if (created) await admin.query(`DROP DATABASE "${databaseName}"`); }
       finally { await admin.end(); }
     }
   }
